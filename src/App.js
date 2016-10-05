@@ -137,6 +137,9 @@ class DependencyTree extends Component {
   renderTree(tree) {
     const allModules = Object.keys(tree);
     const depths = {};
+    const cycles = [];
+    const isInCycle = m => cycles.some(cycle => cycle.includes(m));
+    const isEdgeInCycle = (from, to) => cycles.some(cycle => cycle.includes(from) && cycle.includes(to))
     const isOuterModule = module => module.indexOf('..') === 0;
     const isInnerModule = module => !isOuterModule(module);
     const isImported = module => allModules.some(
@@ -147,18 +150,30 @@ class DependencyTree extends Component {
       m => isInnerModule(m) && tree[m].includes(module)
     );
     let maxDepth = 0;
-    function traverse(root, depth=0) {
+    function traverse(root, depth=0, visited=[]) {
+      const cycleStartIndex = visited.indexOf(root);
+      if (cycleStartIndex >= 0) {
+        // cycle detected....
+        const cycle = visited.slice(cycleStartIndex);
+        cycles.push(cycle);
+        console.log(
+          `Found a cycle: `,
+          cycle.concat(root).join(' -> '));
+        return;
+      }
+      visited[root] = true;
       maxDepth = Math.max(depth, maxDepth);
       if (depths[root] !== undefined && depths[root] > depth) {
-        // already visited this one...
+        // already visited this one through another deeper path...
         return;
       }
       depths[root] = depth;
-      if (depth >= 10) {
+      if (depth >= 20) {
+        console.warn("Maximum depth of 20 exceeded!", visited.join(' -> '))
         return;
       }
       tree[root].forEach(
-        child => traverse(child, depth+1)
+        child => traverse(child, depth+1, visited.concat(root))
       );
     }
     allModules.forEach(m => {
@@ -168,9 +183,8 @@ class DependencyTree extends Component {
     });
     const getLevel = module => isOuterModule(module) ? maxDepth : (depths[module] || 0);
 
-    // create an array with nodes
     var directories = {};
-    console.log("hiding these modules:", allModules.filter(m => !isInnerModule(m) && !isImportedByInnerModule(m)))
+//    console.log("hiding these modules:", allModules.filter(m => !isInnerModule(m) && !isImportedByInnerModule(m)))
     console.log("tree is", tree);
     const modulesToRender = allModules
       .filter(m => isInnerModule(m) || isImportedByInnerModule(m))
@@ -192,28 +206,27 @@ class DependencyTree extends Component {
         dirpath,
         shape: 'dot',
         level: isOuterModule(module) ? maxDepth : (depths[module] || 0),
-        physics: !isRoot(module),
         group: (
-          isOuterModule(module) ? 'out' : isRoot(module) ? 'root' : 'in'
+          isInCycle(module) ? 'cycle' :
+          isOuterModule(module) ? 'out' :
+          isRoot(module) ? 'root' : 'in'
         ),
       };
     });
 
-    // create an array with edges
     var edges = [].concat(
       ...modulesToRender.map(
         module => tree[module]
           .filter(dependency => modulesToRender.includes(dependency))
-          .map(dependency => ({
+          .map(dependency => Object.assign({
             from: module,
             to: dependency,
             arrows: 'to',
-          })
+          }, isEdgeInCycle(module, dependency) ? {color: 'red'} : {})
         )
       )
     );
 
-    // create a network
     var data = {
       nodes: new vis.DataSet(nodes.slice(0)),
       edges: new vis.DataSet(edges.slice(0)),
@@ -222,7 +235,6 @@ class DependencyTree extends Component {
     var options = {
       layout: {
         hierarchical: {
-          direction: 'UD',
           sortMethod: 'directed',
         },
       },
@@ -234,7 +246,6 @@ class DependencyTree extends Component {
         },
       },
       physics: {
-        enabled: true,
         solver: 'hierarchicalRepulsion',
         hierarchicalRepulsion: {
           nodeDistance: 220,
@@ -244,6 +255,7 @@ class DependencyTree extends Component {
         out: {color: '#ccc'},
         in: {color: '#c5c'},
         root: {color: '#c55'},
+        cycle: {color: 'red'},
       }
     };
     var network = new vis.Network(this.root, data, options);
@@ -286,7 +298,7 @@ class DependencyTree extends Component {
   state = {
     path: window.location.pathname,
     tree: {},
-    maxLevel: 4,
+    maxLevel: 10,
   };
 
   goDeeper = () => this.setState({maxLevel: this.state.maxLevel + 1});
@@ -325,6 +337,7 @@ class DependencyTree extends Component {
               border: '1px solid black'
             }}
         />
+        <div ref={el => this.configRoot = el}/>
       </div>
     );
   }
