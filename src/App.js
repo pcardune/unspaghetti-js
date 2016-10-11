@@ -1,4 +1,5 @@
 import React, { Component, PropTypes } from 'react';
+import {Link, withRouter} from 'react-router';
 import vis from 'vis';
 import * as api from './api';
 
@@ -145,7 +146,7 @@ class PathBreadcrumbs extends Component {
            return (
              <li key={part + index} className={`breadcrumb-item ${activeClass}`}>
                {isLast ? part :
-                <a href={'/'+pathParts.slice(0, index+1).join('/')}>{part}</a>}
+                <Link to={'/'+pathParts.slice(0, index+1).join('/')}>{part}</Link>}
              </li>
            );
          })}
@@ -162,17 +163,29 @@ class DirectoryTree extends Component {
 
   state = {
     files: null,
+    fetching: true,
+  };
+
+  fetchFiles = () => {
+    this.setState({fetching: true});
+    api.getFiles(this.props.path).then(
+      files => this.setState({files, fetching: false})
+    );
   };
 
   componentDidMount() {
-    api.getFiles(this.props.path).then(
-      files => this.setState({files})
-    );
+    this.fetchFiles();
+  }
+
+  componentDidUpdate(prevProps) {
+    if (this.props.path !== prevProps.path) {
+      this.fetchFiles();
+    }
   }
 
   render() {
-    if (!this.state.files) {
-      return null;
+    if (!this.state.files && this.state.fetching) {
+      return <span>Loading...</span>;
     }
     const files = this.state.files.items;
     files.sort((a,b) => {
@@ -186,22 +199,25 @@ class DirectoryTree extends Component {
     const pathParts = this.props.path.split('/');
     const lastPathPart = pathParts[pathParts.length - 1];
     return (
-      <div className="list-group">
+      <div
+        className="list-group"
+        style={this.state.fetching ? {opacity: 0.5} : {}}
+      >
         {files.map(item => {
            if (lastPathPart === item.filename) {
-             return <a key={item.filepath} href="#" className="list-group-item active">{item.filename}</a>;
+             return <Link key={item.filepath} to="#" className="list-group-item active">{item.filename}</Link>;
            }
            const pathURL = '/'+item.filepath;
            const href = item.isDirectory ? pathURL : pathURL+'?showDeps=true';
            const text = item.isDirectory ? item.filename+'/' : item.filename;
            return (
-             <a
+             <Link
                key={item.filepath}
                className="list-group-item"
-               href={href}
+               to={href}
              >
                {text}
-             </a>
+             </Link>
            );
          })}
       </div>
@@ -213,6 +229,7 @@ import data from './data.js';
 import newData from './new-data.js';
 const root = new BoxData(newData);
 
+const DependencyTree = withRouter(
 class DependencyTree extends Component {
   renderTree(tree) {
     const allModules = Object.keys(tree);
@@ -438,7 +455,20 @@ class DependencyTree extends Component {
   goShallower = () => this.setState({maxLevel: this.state.maxLevel - 1});
   togglePhysics = () => this.setState({usePhysics: !this.state.usePhysics});
 
+  constructor(props) {
+    super(props);
+  }
+
   componentDidMount() {
+    this.props.router.listen(location => {
+      this.setState(
+        {
+          path: location.pathname.slice(1) || '.',
+          showDeps: location.search.indexOf('showDeps=true') > 0,
+        },
+        () => this.fetchAndRender()
+      );
+    });
     this.fetchAndRender();
   }
 
@@ -465,9 +495,9 @@ class DependencyTree extends Component {
             <div className="col-md-9">
               {this.state.fetchingDeps && <span>Loading dependency tree...</span>}
               {!this.state.showDeps && (
-                 <a href="?showDeps=true" className="btn btn-primary">
+                 <Link to={`/${this.state.path}?showDeps=true`} className="btn btn-primary">
                    Show Dependencies for All Files in Directory
-                 </a>
+                 </Link>
                )}
               {this.state.showDeps && this.state.deps &&
                <div>
@@ -513,7 +543,7 @@ class DependencyTree extends Component {
       </div>
     );
   }
-}
+});
 
 class App extends Component {
 

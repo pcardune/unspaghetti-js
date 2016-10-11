@@ -17,6 +17,7 @@
     "madge": "^1.4.2",
     "react": "^15.3.2",
     "react-dom": "^15.3.2",
+    "react-router": "^2.8.1",
     "vis": "^4.16.1"
   },
   "proxy": "http://localhost:3001/",
