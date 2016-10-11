@@ -149,8 +149,13 @@ class DependencyTree extends Component {
     const isImportedByInnerModule = module => allModules.some(
       m => isInnerModule(m) && tree[m].includes(module)
     );
+    const moduleSortString = {};
     let maxDepth = 0;
     function traverse(root, depth=0, visited=[]) {
+      if (!isInnerModule(root) && !isImportedByInnerModule(root)) {
+        // we are not interested in these...
+        return;
+      }
       const cycleStartIndex = visited.indexOf(root);
       if (cycleStartIndex >= 0) {
         // cycle detected....
@@ -168,6 +173,7 @@ class DependencyTree extends Component {
         return;
       }
       depths[root] = depth;
+      moduleSortString[root] = (visited.join('|') + '|' + root).toLowerCase();
       if (depth >= 20) {
         console.warn("Maximum depth of 20 exceeded!", visited.join(' -> '))
         return;
@@ -184,12 +190,35 @@ class DependencyTree extends Component {
     const getLevel = module => isOuterModule(module) ? maxDepth : (depths[module] || 0);
 
     var directories = {};
-//    console.log("hiding these modules:", allModules.filter(m => !isInnerModule(m) && !isImportedByInnerModule(m)))
+    console.log(
+      "hiding these modules:",
+      allModules
+        .filter(m => getLevel(m) < this.state.maxLevel ||
+                   !(isInnerModule(m) || isImportedByInnerModule(m)))
+        .map(m => `${m} ${getLevel(m)} isInner: ${isInnerModule(m)} isImported: ${isImportedByInnerModule(m)}`)
+    )
     console.log("tree is", tree);
     const modulesToRender = allModules
       .filter(m => isInnerModule(m) || isImportedByInnerModule(m))
       .filter(m => getLevel(m) < this.state.maxLevel);
     console.log("rendering modules", modulesToRender.map(m => m+' '+getLevel(m)));
+    const byLevel = {};
+    let maxNodesInLevel = 0;
+    let maxLevel = 0;
+    modulesToRender.forEach(m => {
+      const level = getLevel(m);
+      byLevel[level] = byLevel[level] || [];
+      byLevel[level].push(m);
+      maxNodesInLevel = Math.max(byLevel[level].length, maxNodesInLevel);
+      maxLevel = Math.max(level, maxLevel);
+    });
+    console.log("max level is", maxLevel, this.state.maxLevel);
+    for (let level = 0; level < maxLevel; level++) {
+      if (byLevel[level]) {
+        byLevel[level].sort((a,b) => moduleSortString[a] > moduleSortString[b] ? 1 : -1);
+      }
+    }
+
     var nodes = modulesToRender.map((module, index) => {
       const parts = module.split('/');
       const dirpath = parts.slice(0, parts.length - 1).join('/');
@@ -199,19 +228,32 @@ class DependencyTree extends Component {
         }
         directories[dirpath].push(module);
       }
-      return {
+      console.log(module, dirpath);
+      const level = getLevel(module);
+      const nodeConfig = {
         id: module,
         label: module,
         title: module,
         dirpath,
         shape: 'dot',
-        level: isOuterModule(module) ? maxDepth : (depths[module] || 0),
+        level,
         group: (
           isInCycle(module) ? 'cycle' :
           isOuterModule(module) ? 'out' :
-          isRoot(module) ? 'root' : 'in'
+          isRoot(module) ? 'root' :
+          //'in'
+          dirpath || 'in'
         ),
       };
+      if (!this.state.usePhysics) {
+        const maxWidth = maxNodesInLevel * 25 * 2 * 4;
+        const spacing = maxWidth / byLevel[level].length;
+        Object.assign(nodeConfig, {
+          x: byLevel[level].indexOf(module) * spacing + spacing / 2,
+          y: level * 25 * 2 * 3,
+        });
+      }
+      return nodeConfig;
     });
 
     var edges = [].concat(
@@ -235,6 +277,7 @@ class DependencyTree extends Component {
     var options = {
       layout: {
         hierarchical: {
+          enabled: this.state.usePhysics,
           sortMethod: 'directed',
         },
       },
@@ -246,9 +289,13 @@ class DependencyTree extends Component {
         },
       },
       physics: {
+        enabled: this.state.usePhysics,
         solver: 'hierarchicalRepulsion',
         hierarchicalRepulsion: {
           nodeDistance: 220,
+        },
+        stabilization: {
+          enabled: this.state.usePhysics,
         },
       },
       groups: {
@@ -284,7 +331,7 @@ class DependencyTree extends Component {
     });
   }
 
-  fetchAndRender() {
+  fetchAndRender = () => {
     fetch(`/api/deps?path=../${this.state.path}`)
       .then(res => res.json())
       .then(treeResponse => {
@@ -298,11 +345,13 @@ class DependencyTree extends Component {
   state = {
     path: window.location.pathname,
     tree: {},
-    maxLevel: 10,
+    maxLevel: 5,
+    usePhysics: false,
   };
 
   goDeeper = () => this.setState({maxLevel: this.state.maxLevel + 1});
   goShallower = () => this.setState({maxLevel: this.state.maxLevel - 1});
+  togglePhysics = () => this.setState({usePhysics: !this.state.usePhysics});
 
   componentDidMount() {
     this.fetchAndRender();
@@ -327,6 +376,14 @@ class DependencyTree extends Component {
           {' '}
           <button onClick={this.goShallower}>
             go shallower
+          </button>
+          {' '}
+          <button onClick={this.fetchAndRender}>
+            refresh
+          </button>
+          {' '}
+          <button onClick={this.togglePhysics}>
+            {this.state.usePhysics ? 'disable physics' : 'enable physics'}
           </button>
         </div>
         <div
