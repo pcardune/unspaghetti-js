@@ -1,5 +1,6 @@
-import React, { Component } from 'react';
+import React, { Component, PropTypes } from 'react';
 import vis from 'vis';
+import * as api from './api';
 
 function getPathData({path, originalPath}) {
   if (!path && originalPath) {
@@ -125,6 +126,85 @@ class Folder extends Component {
           </ul>
         ))}
       </li>
+    );
+  }
+}
+
+class PathBreadcrumbs extends Component {
+  static propTypes = {
+    path: PropTypes.string.isRequired,
+  };
+
+  render() {
+    const pathParts = this.props.path.split('/');
+    return (
+      <ol className="breadcrumb">
+        {pathParts.map((part, index) => {
+           const isLast = index === pathParts.length - 1;
+           const activeClass = isLast ? 'breadcrumb-active' : '';
+           return (
+             <li key={part + index} className={`breadcrumb-item ${activeClass}`}>
+               {isLast ? part :
+                <a href={'/'+pathParts.slice(0, index+1).join('/')}>{part}</a>}
+             </li>
+           );
+         })}
+      </ol>
+    );
+  }
+}
+
+class DirectoryTree extends Component {
+
+  static propTypes = {
+    path: PropTypes.string.isRequired,
+  };
+
+  state = {
+    files: null,
+  };
+
+  componentDidMount() {
+    api.getFiles(this.props.path).then(
+      files => this.setState({files})
+    );
+  }
+
+  render() {
+    if (!this.state.files) {
+      return null;
+    }
+    const files = this.state.files.items;
+    files.sort((a,b) => {
+      if (a.isDirectory && !b.isDirectory) {
+        return -1;
+      } else if (b.isDirectory && !a.isDirectory) {
+        return 1;
+      }
+      return a.filename.toLowerCase() >= b.filename.toLowerCase() ? 1 : -1;
+    });
+    const pathParts = this.props.path.split('/');
+    const lastPathPart = pathParts[pathParts.length - 1];
+    return (
+      <div className="list-group">
+        {files.map(item => {
+           if (lastPathPart === item.filename) {
+             return <a key={item.filepath} href="#" className="list-group-item active">{item.filename}</a>;
+           }
+           const pathURL = '/'+item.filepath;
+           const href = item.isDirectory ? pathURL : pathURL+'?showDeps=true';
+           const text = item.isDirectory ? item.filename+'/' : item.filename;
+           return (
+             <a
+               key={item.filepath}
+               className="list-group-item"
+               href={href}
+             >
+               {text}
+             </a>
+           );
+         })}
+      </div>
     );
   }
 }
@@ -332,19 +412,24 @@ class DependencyTree extends Component {
   }
 
   fetchAndRender = () => {
-    fetch(`/api/deps?path=../${this.state.path}`)
-      .then(res => res.json())
-      .then(treeResponse => {
-        if (!treeResponse) {
-          return;
+    if (this.state.showDeps) {
+      this.setState({fetchingDeps: true});
+      api.getDeps(this.state.path).then(
+        deps => {
+          this.setState({fetchingDeps: false});
+          if (deps) {
+            this.setState({deps});
+          }
         }
-        this.setState({tree: treeResponse.tree});
-      });
+      );
+    }
   }
 
   state = {
-    path: window.location.pathname,
-    tree: {},
+    path: window.location.pathname.slice(1) || '.',
+    fetchingDeps: false,
+    showDeps: window.location.search.indexOf('showDeps=true') > 0,
+    deps: null,
     maxLevel: 5,
     usePhysics: false,
   };
@@ -358,43 +443,73 @@ class DependencyTree extends Component {
   }
 
   componentDidUpdate() {
-    this.renderTree(this.state.tree);
+    if (this.state.deps) {
+      this.renderTree(this.state.deps.tree);
+    }
   }
 
   render() {
     return (
-      <div>
-        <div>
-          path: {this.state.path}
+      <div className="card" style={this.props.style}>
+        <h3 className="card-header">Dependency Graph</h3>
+        <div className="card-block">
+          <div className="row">
+            <div className="col-md-12">
+              <PathBreadcrumbs path={this.state.path} />
+            </div>
+          </div>
+          <div className="row">
+            <div className="col-md-3">
+              <DirectoryTree path={this.state.path}/>
+            </div>
+            <div className="col-md-9">
+              {this.state.fetchingDeps && <span>Loading dependency tree...</span>}
+              {!this.state.showDeps && (
+                 <a href="?showDeps=true" className="btn btn-primary">
+                   Show Dependencies for All Files in Directory
+                 </a>
+               )}
+              {this.state.showDeps && this.state.deps &&
+               <div>
+                 {this.state.deps.skipped.length > 0 &&
+                  <div>
+                    <strong>WARNING:</strong> the following paths could not be resolved...
+                    <ul>
+                      {this.state.deps.skipped.map(path => <li>{path}</li>)}
+                    </ul>
+                  </div>
+                 }
+                 <div className="clearfix">
+                   max depth: {this.state.maxLevel}
+                   <div className="btn-group pull-md-right">
+                     <button className="btn btn-secondary" onClick={this.goDeeper}>
+                       go deeper
+                     </button>
+                     <button className="btn btn-secondary" onClick={this.goShallower}>
+                       go shallower
+                     </button>
+                     <button className="btn btn-secondary" onClick={this.fetchAndRender}>
+                       refresh
+                     </button>
+                     <button className="btn btn-secondary" onClick={this.togglePhysics}>
+                       {this.state.usePhysics ? 'disable physics' : 'enable physics'}
+                     </button>
+                   </div>
+                 </div>
+                 <div
+                   ref={el => this.root = el}
+                   style={{
+                     width: '100%',
+                     height: 600,
+                     border: '1px solid #ccc',
+                     borderRadius: 5,
+                     marginTop: 10,
+                   }}
+                 />
+               </div>}
+            </div>
+          </div>
         </div>
-        <div>
-          max depth: {this.state.maxLevel}
-          {' '}
-          <button onClick={this.goDeeper}>
-            go deeper
-          </button>
-          {' '}
-          <button onClick={this.goShallower}>
-            go shallower
-          </button>
-          {' '}
-          <button onClick={this.fetchAndRender}>
-            refresh
-          </button>
-          {' '}
-          <button onClick={this.togglePhysics}>
-            {this.state.usePhysics ? 'disable physics' : 'enable physics'}
-          </button>
-        </div>
-        <div
-          ref={el => this.root = el}
-          style={{
-              width: '100%',
-              height: 600,
-              border: '1px solid black'
-            }}
-        />
-        <div ref={el => this.configRoot = el}/>
       </div>
     );
   }
@@ -402,11 +517,17 @@ class DependencyTree extends Component {
 
 class App extends Component {
 
-
   render() {
     return (
-      <div style={{padding: 20}}>
-        <DependencyTree />
+      <div className="container-fluid">
+        <div className="row">
+          <div className="col-md-12">
+            <nav className="navbar navbar-dark bg-inverse">
+              <a className="navbar-brand" href="#">Unspaghetti</a>
+            </nav>
+          </div>
+        </div>
+        <DependencyTree style={{marginTop: 10}}/>
         <section style={{maxWidth: 500}}>
           <h1>code.org javascript architecture</h1>
           <p>
