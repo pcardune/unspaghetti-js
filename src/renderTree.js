@@ -1,15 +1,17 @@
 import vis from 'vis';
+import randomColor from 'randomcolor';
 
 export default function renderTree(tree, rootEl, config) {
   config = Object.assign(
     {
       maxLevel: 5,
       usePhysics: false,
+      cluster: true,
     },
     config
   );
   const allModules = Object.keys(tree);
-  const depths = {};
+  const moduleToMaxDepth = {};
   const cycles = [];
   const isInCycle = m => cycles.some(cycle => cycle.includes(m));
   const isEdgeInCycle = (from, to) => cycles.some(cycle => cycle.includes(from) && cycle.includes(to))
@@ -22,6 +24,10 @@ export default function renderTree(tree, rootEl, config) {
   const isImportedByInnerModule = module => allModules.some(
     m => isInnerModule(m) && tree[m].includes(module)
   );
+  const getModuleDirpath = (module) => {
+    const parts = module.split('/');
+    return parts.slice(0, parts.length - 1).join('/') || '.';
+  }
   const moduleSortString = {};
   let maxDepth = 0;
   function traverse(root, depth=0, visited=[]) {
@@ -41,12 +47,12 @@ export default function renderTree(tree, rootEl, config) {
     }
     visited[root] = true;
     maxDepth = Math.max(depth, maxDepth);
-    if (depths[root] !== undefined && depths[root] > depth) {
+    if (moduleToMaxDepth[root] !== undefined && moduleToMaxDepth[root] > depth) {
       // already visited this one through another deeper path...
       return;
     }
-    depths[root] = depth;
-    moduleSortString[root] = (visited.join('|') + '|' + root).toLowerCase();
+    moduleToMaxDepth[root] = depth;
+    moduleSortString[root] = getModuleDirpath(root).toLowerCase(); //(visited.join('|') + '|' + root).toLowerCase();
     if (depth >= 20) {
       console.warn("Maximum depth of 20 exceeded!", visited.join(' -> '))
       return;
@@ -60,49 +66,49 @@ export default function renderTree(tree, rootEl, config) {
       traverse(m);
     }
   });
-  const getLevel = module => isOuterModule(module) ? maxDepth : (depths[module] || 0);
+  const getLevel = module => isOuterModule(module) ? maxDepth : (moduleToMaxDepth[module] || 0);
 
   var directories = {};
-  console.log(
-    "hiding these modules:",
-    allModules
-      .filter(m => getLevel(m) < config.maxLevel ||
-                 !(isInnerModule(m) || isImportedByInnerModule(m)))
-      .map(m => `${m} ${getLevel(m)} isInner: ${isInnerModule(m)} isImported: ${isImportedByInnerModule(m)}`)
-  )
-  console.log("tree is", tree);
+
   const modulesToRender = allModules
     .filter(m => isInnerModule(m) || isImportedByInnerModule(m))
     .filter(m => getLevel(m) < config.maxLevel);
-  console.log("rendering modules", modulesToRender.map(m => m+' '+getLevel(m)));
-  const byLevel = {};
+//  console.log("rendering modules", modulesToRender.map(m => m+' '+getLevel(m)));
+  // compute module distribution in graph
+  const modulesByLevel = {};
   let maxNodesInLevel = 0;
   let maxLevel = 0;
   modulesToRender.forEach(m => {
     const level = getLevel(m);
-    byLevel[level] = byLevel[level] || [];
-    byLevel[level].push(m);
-    maxNodesInLevel = Math.max(byLevel[level].length, maxNodesInLevel);
+    modulesByLevel[level] = modulesByLevel[level] || [];
+    modulesByLevel[level].push(m);
+    maxNodesInLevel = Math.max(modulesByLevel[level].length, maxNodesInLevel);
     maxLevel = Math.max(level, maxLevel);
   });
-  console.log("max level is", maxLevel, config.maxLevel);
+//  console.log("max level is", maxLevel, config.maxLevel);
   for (let level = 0; level < maxLevel; level++) {
-    if (byLevel[level]) {
-      byLevel[level].sort((a,b) => moduleSortString[a] > moduleSortString[b] ? 1 : -1);
+    if (modulesByLevel[level]) {
+      modulesByLevel[level].sort((a,b) => moduleSortString[a] > moduleSortString[b] ? 1 : -1);
     }
   }
 
+  let groupsConfig = {
+    cycle: {color: 'red'},
+  };
+
   var nodes = modulesToRender.map((module, index) => {
-    const parts = module.split('/');
-    const dirpath = parts.slice(0, parts.length - 1).join('/');
-    if (dirpath) {
-      if (!directories[dirpath]) {
-        directories[dirpath] = [];
-      }
-      directories[dirpath].push(module);
-    }
-    console.log(module, dirpath);
+    const dirpath = getModuleDirpath(module);
     const level = getLevel(module);
+    let directory = directories[dirpath];
+    if (!directory) {
+      directories[dirpath] = directory = {
+        modules:[],
+        minModuleLevel: Infinity,
+      };
+    }
+    directory.modules.push(module);
+    directory.minModuleLevel = Math.min(directory.minModuleLevel, level)
+//    console.log(module, dirpath);
     const nodeConfig = {
       id: module,
       label: module,
@@ -110,35 +116,53 @@ export default function renderTree(tree, rootEl, config) {
       dirpath,
       shape: 'dot',
       level,
-      group: (
-        isInCycle(module) ? 'cycle' :
-        isOuterModule(module) ? 'out' :
-        isRoot(module) ? 'root' :
-        //'in'
-        dirpath || 'in'
-      ),
+      group: isInCycle(module) ? 'cycle' : dirpath || '.',
     };
+    if (!groupsConfig[nodeConfig.group]) {
+      groupsConfig[nodeConfig.group] = {color: randomColor({seed: nodeConfig.group})};
+    }
     if (!config.usePhysics) {
       const maxWidth = maxNodesInLevel * 25 * 2 * 4;
-      const spacing = maxWidth / byLevel[level].length;
+      const spacing = maxWidth / modulesByLevel[level].length;
       Object.assign(nodeConfig, {
-        x: byLevel[level].indexOf(module) * spacing + spacing / 2,
+        x: modulesByLevel[level].indexOf(module) * spacing + spacing / 2,
         y: level * 25 * 2 * 3,
       });
     }
     return nodeConfig;
   });
 
+  const directoriesByLevel = {};
+  let maxDirectoriesInLevel = 0;
+  Object.keys(directories).forEach(dirpath => {
+    let directoryLevel = directories[dirpath].minModuleLevel;
+    let directoriesInLevel = directoriesByLevel[directoryLevel];
+    if (!directoriesInLevel) {
+      directoriesInLevel = directoriesByLevel[directoryLevel] = []
+    }
+    if (!directoriesInLevel.includes(dirpath)) {
+      directoriesInLevel.push(dirpath);
+    }
+    maxDirectoriesInLevel = Math.max(directoriesInLevel.length, maxDirectoriesInLevel);
+  });
+  for (let level = 0; level < maxLevel; level++) {
+    if (directoriesByLevel[level]) {
+      console.log('directoriesByLevel', level, directoriesByLevel[level]);
+    }
+  }
+
   var edges = [].concat(
     ...modulesToRender.map(
       module => tree[module]
         .filter(dependency => modulesToRender.includes(dependency))
-        .map(dependency => Object.assign({
-          from: module,
-          to: dependency,
-          arrows: 'to',
-        }, isEdgeInCycle(module, dependency) ? {color: 'red'} : {})
-        )
+        .map(dependency => Object.assign(
+          {
+            from: module,
+            to: dependency,
+            arrows: 'to',
+          },
+          isEdgeInCycle(module, dependency) ? {color: 'red'} : {}
+        ))
     )
   );
 
@@ -146,7 +170,7 @@ export default function renderTree(tree, rootEl, config) {
     nodes: new vis.DataSet(nodes.slice(0)),
     edges: new vis.DataSet(edges.slice(0)),
   };
-  console.log("data is", {nodes, edges});
+//  console.log("data is", {nodes, edges});
   var options = {
     layout: {
       hierarchical: {
@@ -171,14 +195,49 @@ export default function renderTree(tree, rootEl, config) {
         enabled: config.usePhysics,
       },
     },
-    groups: {
-      out: {color: '#ccc'},
-      in: {color: '#c5c'},
-      root: {color: '#c55'},
-      cycle: {color: 'red'},
-    }
+    groups: groupsConfig,
   };
   var network = new vis.Network(rootEl, data, options);
+
+  function clusterDirpath(dirpath) {
+    const clusterConfig = {
+      group: dirpath,
+      label: dirpath + '/*',
+      shape: 'dot',
+      level: directories[dirpath].minModuleLevel,
+    };
+
+    if (!config.usePhysics) {
+      const clustersOnThisLevel = [];
+      modulesByLevel[clusterConfig.level].forEach((module, index) => {
+        const moduleDirpath = getModuleDirpath(module);
+        const moduleClusterLevel = directories[moduleDirpath].minModuleLevel;
+        if (clustersOnThisLevel.indexOf(moduleDirpath) < 0 &&
+            moduleClusterLevel === clusterConfig.level) {
+          clustersOnThisLevel.push(moduleDirpath);
+        }
+      });
+      const maxWidth = maxDirectoriesInLevel * 25 * 2 * 4;
+      const spacing = maxWidth / directoriesByLevel[clusterConfig.level].length;
+      console.log(
+        'x',
+        'maxWidth', maxWidth,
+        'spacing', spacing,
+        'on level', clusterConfig.level,
+        'cluster', clusterConfig.group,
+        'is at index',
+        directoriesByLevel[clusterConfig.level].indexOf(dirpath));
+      Object.assign(clusterConfig, {
+        x: directoriesByLevel[clusterConfig.level].indexOf(dirpath) * spacing + spacing / 2,
+        y: clusterConfig.level * 25 * 2 * 3,
+      });
+    }
+
+    network.cluster({
+      joinCondition: (otherNode) => otherNode.dirpath === dirpath,
+      clusterNodeProperties: clusterConfig
+    });
+  }
   network.on("selectNode", ({nodes}) => {
     if (nodes.length === 1) {
     }
@@ -186,20 +245,17 @@ export default function renderTree(tree, rootEl, config) {
   network.on('doubleClick', (params) => {
     const {nodes} = params;
     if (nodes.length === 1) {
-      if (network.isCluster(nodes[0])) {
-        network.openCluster(nodes[0]);
+      const nodeId = nodes[0];
+      if (network.isCluster(nodeId)) {
+        network.openCluster(nodeId);
       } else {
-        const groupBy = 'dirpath';
-        const value = data.nodes.get(nodes[0])[groupBy];
-        network.cluster({
-          joinCondition: node => node[groupBy] === value,
-          clusterNodeProperties: {
-            [groupBy]: value,
-            label: `${groupBy} ${value}`,
-            shape: 'dot',
-          }
-        });
+        clusterDirpath(data.nodes.get(nodeId).dirpath);
       }
     }
   });
+  if (config.cluster) {
+    Object.keys(directories).forEach(clusterDirpath);
+  }
+  network.fit();
+  return groupsConfig;
 }
