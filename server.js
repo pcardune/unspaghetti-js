@@ -26,29 +26,6 @@ if (process.env.MADGERC) {
   console.warn("No MADGERC environment variable specified. Your milage may vary.");
   madgeConfig = {};
 }
-madgeConfig = {
-  "showFileExtension": true,
-  "fontSize": "10px",
-  "backgroundColor": "#ffffff",
-  "nodeColor": "#000000",
-  "noDependencyColor": "#00aa00",
-  "cyclicNodeColor": "#ff0000",
-  "edgeColor": "#000000",
-  "graphVizOptions": {
-    "G": {
-      "rankdir": "TB"
-    }
-  },
-  "fileExtensions": ["", "js", "jsx"],
-  "layout": "dot",
-  "detectiveOptions": {
-    "es6": {
-      "mixedImports": true
-    }
-  },
-//  "baseDir": "../code-dot-org/apps/src",
-  "webpackConfig": "../code-dot-org/apps/.madge.webpack.config.js"
-}
 
 const app = express();
 
