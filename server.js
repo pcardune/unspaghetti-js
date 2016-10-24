@@ -2,6 +2,9 @@ import express from 'express';
 import madge from 'madge';
 import fs from 'fs';
 import path from 'path';
+import _debug from 'debug';
+
+const debug = _debug('unspaghetti');
 
 const BUILD_PATH = path.join(__dirname, 'build')
 const BASE_PATH = process.env.BASE_PATH || '.';
@@ -35,10 +38,12 @@ if (MADGERC) {
   madgeConfig = JSON.parse(fs.readFileSync(MADGERC));
   madgeConfig.baseDir = adjustMadgeConfigPath(madgeConfig.baseDir);
   madgeConfig.webpackConfig = adjustMadgeConfigPath(madgeConfig.webpackConfig);
-  console.log("using madge config at", MADGERC, "\n", madgeConfig);
+  debug("using madge config at", MADGERC, "\n", madgeConfig);
 } else {
-  console.warn(`.madgerc file not found at ${BASE_PATH} and no MADGERC ` +
-               `environment variable specified. Your milage may vary.`);
+  console.warn(
+    `.madgerc file not found at ${BASE_PATH} and no MADGERC ` +
+    `environment variable specified. Your milage may vary.`
+  );
   madgeConfig = {};
 }
 
@@ -102,7 +107,7 @@ app.get('/api/ls', (req, res) => {
 
 app.get('/api/deps', (req, res) => {
   const depsPath = path.resolve(BASE_PATH, req.query.path);
-  console.info(`Getting dependency graph for ${depsPath}`);
+  debug(`Getting dependency graph for ${depsPath}`);
   madge(depsPath, madgeConfig)
     .then(tree => res.json(tree))
     .catch((err) => {

@@ -53,6 +53,16 @@ variable.
 PORT=5005 npm start
 ```
 
+### Turning on Debugging ###
+
+If you aren't seeing a dependency graph that you expect, something is probably
+wrong. You can turn on debugging with the `DEBUG` environment variable to find
+out what is happening:
+
+```
+DEBUG=* npm start
+```
+
 ## Development
 
 If you want to develop `unspaghetti-js` and get nice things like unminified
