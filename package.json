@@ -24,11 +24,13 @@
   },
   "proxy": "http://localhost:3001/",
   "scripts": {
-    "start": "react-scripts start",
+    "start": "./node_modules/.bin/babel-node server.js",
+    "start:client": "react-scripts start",
+    "start:server": "./node_modules/.bin/babel-node server.js",
+    "postinstall": "npm run build",
     "build": "react-scripts build",
     "test": "react-scripts test --env=jsdom",
-    "eject": "react-scripts eject",
-    "server": "API_PORT=3001 ./node_modules/.bin/babel-node server.js"
+    "eject": "react-scripts eject"
   },
   "babel": {
     "presets": [

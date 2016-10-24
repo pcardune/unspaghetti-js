@@ -3,33 +3,48 @@ import madge from 'madge';
 import fs from 'fs';
 import path from 'path';
 
+const BUILD_PATH = path.join(__dirname, 'build')
 const BASE_PATH = process.env.BASE_PATH || '.';
+const MADGERC = (() => {
+  if (process.env.MADGERC) {
+    return process.env.MADGERC;
+  } else {
+    const possiblePath = path.resolve(BASE_PATH, '.madgerc');
+    try {
+      fs.accessSync(possiblePath);
+      return possiblePath;
+    } catch (e) {
+      return null;
+    }
+  }
+})();
 
 let madgeConfig;
 
 function adjustMadgeConfigPath(p) {
   if (!p) {
-    return path.resolve(path.dirname(process.env.MADGERC));
+    return path.resolve(path.dirname(MADGERC));
   } else if (p[0] !== '/') {
     // p is a relative path. Make it absolute
     // since this process might be running in a different directory
-    return path.resolve(path.dirname(process.env.MADGERC), p);
+    return path.resolve(path.dirname(MADGERC), p);
   }
 }
 
-if (process.env.MADGERC) {
-  madgeConfig = JSON.parse(fs.readFileSync(process.env.MADGERC));
+if (MADGERC) {
+  madgeConfig = JSON.parse(fs.readFileSync(MADGERC));
   madgeConfig.baseDir = adjustMadgeConfigPath(madgeConfig.baseDir);
   madgeConfig.webpackConfig = adjustMadgeConfigPath(madgeConfig.webpackConfig);
-  console.log("using madge config", madgeConfig);
+  console.log("using madge config at", MADGERC, "\n", madgeConfig);
 } else {
-  console.warn("No MADGERC environment variable specified. Your milage may vary.");
+  console.warn(`.madgerc file not found at ${BASE_PATH} and no MADGERC ` +
+               `environment variable specified. Your milage may vary.`);
   madgeConfig = {};
 }
 
 const app = express();
-
-app.set('port', (process.env.API_PORT || 3001));
+app.use(express.static(BUILD_PATH));
+app.set('port', (process.env.PORT || 3001));
 
 const FILE_EXTENSIONS = madgeConfig.fileExtensions || ['', 'js'];
 
