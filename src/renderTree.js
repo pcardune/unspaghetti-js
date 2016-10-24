@@ -20,7 +20,6 @@ export default function renderTree(tree, rootEl, config) {
   const isImported = module => allModules.some(
     m => tree[m].includes(module)
   );
-  const isRoot = module => !isImported(module);
   const isImportedByInnerModule = module => allModules.some(
     m => isInnerModule(m) && tree[m].includes(module)
   );

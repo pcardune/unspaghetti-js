@@ -69,7 +69,7 @@ export default withRouter(
           {
             path,
             showDeps: query.showDeps !== undefined,
-            maxLevel: query.maxLevel ? parseInt(query.maxLevel) : 5,
+            maxLevel: query.maxLevel ? parseInt(query.maxLevel, 10) : 5,
             usePhysics: query.usePhysics !== undefined,
             cluster: query.cluster !== undefined,
           },
