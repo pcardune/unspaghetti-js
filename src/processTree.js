@@ -1,7 +1,7 @@
 import vis from 'vis';
 import randomColor from 'randomcolor';
 
-export default function renderTree(tree, rootEl, config) {
+export default function processTree(tree, config) {
   config = Object.assign(
     {
       maxLevel: 5,
@@ -169,7 +169,7 @@ export default function renderTree(tree, rootEl, config) {
     nodes: new vis.DataSet(nodes.slice(0)),
     edges: new vis.DataSet(edges.slice(0)),
   };
-//  console.log("data is", {nodes, edges});
+
   var options = {
     layout: {
       hierarchical: {
@@ -196,65 +196,50 @@ export default function renderTree(tree, rootEl, config) {
     },
     groups: groupsConfig,
   };
-  var network = new vis.Network(rootEl, data, options);
 
-  function clusterDirpath(dirpath) {
-    const clusterConfig = {
-      group: dirpath,
-      label: dirpath + '/*',
-      shape: 'dot',
-      level: directories[dirpath].minModuleLevel,
-    };
+  return {
+    data,
+    options,
+    directories,
+    clusterDirpath(dirpath, network) {
+      const clusterConfig = {
+        group: dirpath,
+        label: dirpath + '/*',
+        shape: 'dot',
+        level: directories[dirpath].minModuleLevel,
+      };
 
-    if (!config.usePhysics) {
-      const clustersOnThisLevel = [];
-      modulesByLevel[clusterConfig.level].forEach((module, index) => {
-        const moduleDirpath = getModuleDirpath(module);
-        const moduleClusterLevel = directories[moduleDirpath].minModuleLevel;
-        if (clustersOnThisLevel.indexOf(moduleDirpath) < 0 &&
-            moduleClusterLevel === clusterConfig.level) {
-          clustersOnThisLevel.push(moduleDirpath);
-        }
-      });
-      const maxWidth = maxDirectoriesInLevel * 25 * 2 * 4;
-      const spacing = maxWidth / directoriesByLevel[clusterConfig.level].length;
-      console.log(
-        'x',
-        'maxWidth', maxWidth,
-        'spacing', spacing,
-        'on level', clusterConfig.level,
-        'cluster', clusterConfig.group,
-        'is at index',
-        directoriesByLevel[clusterConfig.level].indexOf(dirpath));
-      Object.assign(clusterConfig, {
-        x: directoriesByLevel[clusterConfig.level].indexOf(dirpath) * spacing + spacing / 2,
-        y: clusterConfig.level * 25 * 2 * 3,
-      });
-    }
-
-    network.cluster({
-      joinCondition: (otherNode) => otherNode.dirpath === dirpath,
-      clusterNodeProperties: clusterConfig
-    });
-  }
-  network.on("selectNode", ({nodes}) => {
-    if (nodes.length === 1) {
-    }
-  });
-  network.on('doubleClick', (params) => {
-    const {nodes} = params;
-    if (nodes.length === 1) {
-      const nodeId = nodes[0];
-      if (network.isCluster(nodeId)) {
-        network.openCluster(nodeId);
-      } else {
-        clusterDirpath(data.nodes.get(nodeId).dirpath);
+      if (!config.usePhysics) {
+        const clustersOnThisLevel = [];
+        modulesByLevel[clusterConfig.level].forEach((module, index) => {
+          const moduleDirpath = getModuleDirpath(module);
+          const moduleClusterLevel = directories[moduleDirpath].minModuleLevel;
+          if (clustersOnThisLevel.indexOf(moduleDirpath) < 0 &&
+              moduleClusterLevel === clusterConfig.level) {
+            clustersOnThisLevel.push(moduleDirpath);
+          }
+        });
+        const maxWidth = maxDirectoriesInLevel * 25 * 2 * 4;
+        const spacing = maxWidth / directoriesByLevel[clusterConfig.level].length;
+        console.log(
+          'x',
+          'maxWidth', maxWidth,
+          'spacing', spacing,
+          'on level', clusterConfig.level,
+          'cluster', clusterConfig.group,
+          'is at index',
+          directoriesByLevel[clusterConfig.level].indexOf(dirpath));
+        Object.assign(clusterConfig, {
+          x: directoriesByLevel[clusterConfig.level].indexOf(dirpath) * spacing + spacing / 2,
+          y: clusterConfig.level * 25 * 2 * 3,
+        });
       }
+
+      network.cluster({
+        joinCondition: (otherNode) => otherNode.dirpath === dirpath,
+        clusterNodeProperties: clusterConfig
+      });
     }
-  });
-  if (config.cluster) {
-    Object.keys(directories).forEach(clusterDirpath);
-  }
-  network.fit();
-  return groupsConfig;
+  };
+
 }
