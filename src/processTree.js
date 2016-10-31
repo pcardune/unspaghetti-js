@@ -1,5 +1,6 @@
 import vis from 'vis';
 import randomColor from 'randomcolor';
+import {getModuleDirpath} from './util';
 
 export default function processTree(tree, config) {
   config = Object.assign(
@@ -23,10 +24,6 @@ export default function processTree(tree, config) {
   const isImportedByInnerModule = module => allModules.some(
     m => isInnerModule(m) && tree[m].includes(module)
   );
-  const getModuleDirpath = (module) => {
-    const parts = module.split('/');
-    return parts.slice(0, parts.length - 1).join('/') || '.';
-  }
   const moduleSortString = {};
   let maxDepth = 0;
   function traverse(root, depth=0, visited=[]) {

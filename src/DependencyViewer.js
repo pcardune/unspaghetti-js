@@ -6,6 +6,7 @@ import PathBreadcrumbs from './PathBreadcrumbs';
 import DirectoryTree from './DirectoryTree';
 import DependencyGraph from './DependencyGraph';
 import processTree from './processTree';
+import LeafNodes from './LeafNodes';
 
 export default withRouter(
   class DependencyViewer extends Component {
@@ -46,7 +47,11 @@ export default withRouter(
     componentDidMount() {
       this.props.router.listen(location => {
         const query = queryString.parse(location.search);
-        const path = location.pathname.slice(1) || '.';
+        let slicedPath = location.pathname.slice(1);
+        if (slicedPath && !slicedPath.startsWith('.')) {
+          slicedPath = './' + slicedPath
+        }
+        const path = slicedPath || '.';
         this.setState(
           {
             path,
@@ -84,6 +89,7 @@ export default withRouter(
     }
 
     render() {
+      console.log("path is", this.state.path);
       return (
         <div style={this.props.style}>
           <div className="row">
@@ -116,14 +122,21 @@ export default withRouter(
                      refresh
                    </button>
                    {this.state.processedTree &&
-                    <DependencyGraph
-                      path={this.state.path}
-                      deps={this.state.deps}
-                      maxLevel={this.state.maxLevel}
-                      usePhysics={this.state.usePhysics}
-                      cluster={this.state.cluster}
-                      processedTree={this.state.processedTree}
-                    />}
+                    <div style={{marginTop: 10}}>
+                      <LeafNodes
+                        deps={this.state.deps}
+                        processedTree={this.state.processedTree}
+                        path={this.state.path}
+                      />
+                      <DependencyGraph
+                        path={this.state.path}
+                        deps={this.state.deps}
+                        maxLevel={this.state.maxLevel}
+                        usePhysics={this.state.usePhysics}
+                        cluster={this.state.cluster}
+                        processedTree={this.state.processedTree}
+                      />
+                    </div>}
                  </div>}
             </div>
           </div>

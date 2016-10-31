@@ -13,10 +13,13 @@ export default class PathBreadcrumbs extends Component {
         {pathParts.map((part, index) => {
            const isLast = index === pathParts.length - 1;
            const activeClass = isLast ? 'breadcrumb-active' : '';
+           const partName = part === '.' ? 'ROOT' : part
            return (
              <li key={part + index} className={`breadcrumb-item ${activeClass}`}>
-               {isLast ? part :
-                <Link to={'/'+pathParts.slice(0, index+1).join('/')}>{part}</Link>}
+               {isLast ? partName :
+                <Link to={'/'+pathParts.slice(0, index+1).join('/')}>
+                  {partName}
+                </Link>}
              </li>
            );
          })}

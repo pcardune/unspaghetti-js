@@ -86,8 +86,15 @@ function getFilesJSON(lsPath, basePath, items) {
   };
 }
 
+function getBasePath() {
+  if (madgeConfig.baseDir) {
+    return madgeConfig.baseDir;
+  }
+  return BASE_PATH;
+}
+
 app.get('/api/ls', (req, res) => {
-  let lsPath = path.resolve(BASE_PATH, req.query.path || '.');
+  let lsPath = path.resolve(getBasePath(), req.query.path || '.');
   let basePath = req.query.path;
   if (!fs.lstatSync(lsPath).isDirectory()) {
     lsPath = path.dirname(lsPath);
@@ -106,7 +113,7 @@ app.get('/api/ls', (req, res) => {
 });
 
 app.get('/api/deps', (req, res) => {
-  const depsPath = path.resolve(BASE_PATH, req.query.path);
+  const depsPath = path.resolve(getBasePath(), req.query.path);
   debug(`Getting dependency graph for ${depsPath}`);
   madge(depsPath, madgeConfig)
     .then(tree => res.json(tree))
