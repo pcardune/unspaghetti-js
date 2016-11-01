@@ -11,7 +11,7 @@ yet. As such, the first step is to clone this repository and run `npm install`.
 ```
 git clone https://github.com/pcardune/unspaghetti-js.git
 cd unspaghetti-js
-npm install
+npm install # or use yarn
 ```
 
 To start up the tool, run:
