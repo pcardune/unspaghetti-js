@@ -7,6 +7,8 @@ import DirectoryTree from './DirectoryTree';
 import DependencyGraph from './DependencyGraph';
 import processTree from './processTree';
 import LeafNodes from './LeafNodes';
+import Cycles from './Cycles';
+import DirectoryCycles from './DirectoryCycles';
 
 export default withRouter(
   class DependencyViewer extends Component {
@@ -92,53 +94,59 @@ export default withRouter(
       console.log("path is", this.state.path);
       return (
         <div style={this.props.style}>
-          <div className="row">
-            <div className="col-md-12">
-              <PathBreadcrumbs path={this.state.path} />
+        <div className="row">
+        <div className="col-md-12">
+        <PathBreadcrumbs path={this.state.path} />
+        </div>
+        </div>
+        <div className="row">
+        <div className="col-md-3">
+        <DirectoryTree path={this.state.path}/>
+        </div>
+        <div className="col-md-9">
+        {this.state.fetchingDeps && <span>Loading dependency tree...</span>}
+        {!this.state.showDeps && (
+          <Link to={`/${this.state.path}?showDeps=true`} className="btn btn-primary">
+            Show Dependencies for All Files in Directory
+          </Link>
+        )}
+        {this.state.showDeps && this.state.deps &&
+         <div>
+           {this.state.deps.skipped.length > 0 &&
+            <div>
+              <strong>WARNING:</strong> the following paths could not be resolved...
+              <ul>
+                {this.state.deps.skipped.map(path => <li key={path}>{path}</li>)}
+              </ul>
             </div>
-          </div>
-          <div className="row">
-            <div className="col-md-3">
-              <DirectoryTree path={this.state.path}/>
-            </div>
-            <div className="col-md-9">
-              {this.state.fetchingDeps && <span>Loading dependency tree...</span>}
-              {!this.state.showDeps && (
-                 <Link to={`/${this.state.path}?showDeps=true`} className="btn btn-primary">
-                   Show Dependencies for All Files in Directory
-                 </Link>
-               )}
-                {this.state.showDeps && this.state.deps &&
-                 <div>
-                   {this.state.deps.skipped.length > 0 &&
-                    <div>
-                      <strong>WARNING:</strong> the following paths could not be resolved...
-                      <ul>
-                        {this.state.deps.skipped.map(path => <li key={path}>{path}</li>)}
-                      </ul>
-                    </div>
-                   }
-                   <button className="btn btn-secondary" onClick={this.forceFetchAndRender}>
-                     refresh
-                   </button>
-                   {this.state.processedTree &&
-                    <div style={{marginTop: 10}}>
-                      <LeafNodes
-                        deps={this.state.deps}
-                        processedTree={this.state.processedTree}
-                        path={this.state.path}
-                      />
-                      <DependencyGraph
-                        path={this.state.path}
-                        deps={this.state.deps}
-                        maxLevel={this.state.maxLevel}
-                        usePhysics={this.state.usePhysics}
-                        cluster={this.state.cluster}
-                        processedTree={this.state.processedTree}
-                      />
-                    </div>}
-                 </div>}
-            </div>
+           }
+           <button className="btn btn-secondary" onClick={this.forceFetchAndRender}>
+             refresh
+           </button>
+           {this.state.processedTree &&
+            <div style={{marginTop: 10}}>
+              <DirectoryCycles
+                processedTree={this.state.processedTree}
+              />
+              <Cycles
+                processedTree={this.state.processedTree}
+              />
+              <LeafNodes
+                deps={this.state.deps}
+                processedTree={this.state.processedTree}
+                path={this.state.path}
+              />
+              <DependencyGraph
+                path={this.state.path}
+                deps={this.state.deps}
+                maxLevel={this.state.maxLevel}
+                usePhysics={this.state.usePhysics}
+                cluster={this.state.cluster}
+                processedTree={this.state.processedTree}
+              />
+            </div>}
+         </div>}
+        </div>
           </div>
         </div>
       );

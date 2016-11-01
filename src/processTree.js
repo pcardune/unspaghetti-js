@@ -14,6 +14,7 @@ export default function processTree(tree, config) {
   const allModules = Object.keys(tree);
   const moduleToMaxDepth = {};
   const cycles = [];
+  const dirpathCycles = {};
   const isInCycle = m => cycles.some(cycle => cycle.includes(m));
   const isEdgeInCycle = (from, to) => cycles.some(cycle => cycle.includes(from) && cycle.includes(to))
   const isOuterModule = module => module.indexOf('..') === 0;
@@ -26,35 +27,76 @@ export default function processTree(tree, config) {
   );
   const moduleSortString = {};
   let maxDepth = 0;
-  function traverse(root, depth=0, visited=[]) {
+  function traverse(root, depth=0, visitedModules=[], visitedDirpaths=[]) {
     if (!isInnerModule(root) && !isImportedByInnerModule(root)) {
       // we are not interested in these...
       return;
     }
-    const cycleStartIndex = visited.indexOf(root);
+    const rootDirpath = getModuleDirpath(root);
+    const cycleStartIndex = visitedModules.indexOf(root);
     if (cycleStartIndex >= 0) {
       // cycle detected....
-      const cycle = visited.slice(cycleStartIndex);
+      const cycle = visitedModules.slice(cycleStartIndex);
       cycles.push(cycle);
       console.log(
         `Found a cycle: `,
         cycle.concat(root).join(' -> '));
       return;
     }
-    visited[root] = true;
+    const dirpathCycleStartIndex = visitedDirpaths.findIndex(d => d.dirpath === rootDirpath);
+    if (dirpathCycleStartIndex >= 0 && dirpathCycleStartIndex < visitedDirpaths.length - 1) {
+      const cycle = visitedDirpaths.slice(dirpathCycleStartIndex);
+      const cycleDirs = cycle.map(c => c.dirpath);
+      if (cycleDirs[cycleDirs.length - 1] !== rootDirpath) {
+        cycleDirs.push(rootDirpath);
+      }
+      const key = cycleDirs.join(',');
+      console.log("found cycle", key);
+      if (!dirpathCycles[key]) {
+        dirpathCycles[key] = {
+          dirpathCycle: cycleDirs,
+          visitedModules: {},
+        };
+      }
+      const modulePath = visitedModules.slice(cycle[0].startIndex).concat(
+        root
+      );
+      dirpathCycles[key].visitedModules[modulePath.join(',')] = modulePath;
+    }
+    visitedModules[root] = true;
     maxDepth = Math.max(depth, maxDepth);
     if (moduleToMaxDepth[root] !== undefined && moduleToMaxDepth[root] > depth) {
       // already visited this one through another deeper path...
       return;
     }
     moduleToMaxDepth[root] = depth;
-    moduleSortString[root] = getModuleDirpath(root).toLowerCase(); //(visited.join('|') + '|' + root).toLowerCase();
+    moduleSortString[root] = rootDirpath.toLowerCase(); //(visitedModules.join('|') + '|' + root).toLowerCase();
     if (depth >= 20) {
-      console.warn("Maximum depth of 20 exceeded!", visited.join(' -> '))
+      console.warn("Maximum depth of 20 exceeded!", visitedModules.join(' -> '))
       return;
     }
+    let nextVisitedDirpaths = visitedDirpaths;
+    if (visitedDirpaths.length === 0 ||
+        visitedDirpaths[visitedDirpaths.length - 1].dirpath !== rootDirpath
+    ) {
+      nextVisitedDirpaths = nextVisitedDirpaths.concat({
+        dirpath: rootDirpath,
+        startIndex: visitedModules.length,
+        endIndex: visitedModules.length,
+      });
+    } else {
+      nextVisitedDirpaths[nextVisitedDirpaths.length - 1] = {
+        ...visitedDirpaths[visitedDirpaths.length - 1],
+        endIndex: visitedDirpaths[visitedDirpaths.length - 1].endIndex + 1
+      };
+    }
     tree[root].forEach(
-      child => traverse(child, depth+1, visited.concat(root))
+      child => traverse(
+        child,
+        depth + 1,
+        visitedModules.concat(root),
+        nextVisitedDirpaths
+      )
     );
   }
   allModules.forEach(m => {
@@ -198,6 +240,8 @@ export default function processTree(tree, config) {
     data,
     options,
     directories,
+    cycles,
+    dirpathCycles: Object.values(dirpathCycles),
     clusterDirpath(dirpath, network) {
       const clusterConfig = {
         group: dirpath,

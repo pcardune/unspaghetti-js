@@ -1,5 +1,6 @@
 import React, {Component, PropTypes} from 'react';
 import {getModuleDirpath} from './util';
+import Advice from './Advice';
 
 export default class LeafNodes extends Component {
 
@@ -19,30 +20,25 @@ export default class LeafNodes extends Component {
         }
       }
     });
+    let explanation = `Good job, there aren't any leaf nodes in the top level directory!`
+    if (leafNodes.length > 0) {
+      explanation = `Consider moving modules with no dependencies into a "util" directory
+      since they probably don't do a whole lot.`
+    }
     return (
-      <div className="card">
-        <div className="card-header">
-          Leaf Nodes in {this.props.path}
+      <Advice
+        title={`Leaf Nodes in ${this.props.path}`}
+        explanation={explanation}
+        failure={leafNodes.length > 0}
+      >
+        <div className="list-group">
+          {leafNodes.map(module => (
+             <div key={module} className="list-group-item">
+               {module}
+             </div>
+           ))}
         </div>
-        {leafNodes.length > 0 ?
-         <div className="card-block">
-           <p>
-             Consider moving modules with no dependencies into a "util" directory
-             since they probably don't do a whole lot.
-           </p>
-           <div className="list-group">
-             {leafNodes.map(module => (
-                <div key={module} className="list-group-item">
-                  {module}
-                </div>
-              ))}
-           </div>
-         </div> :
-         <div className="card-block">
-           <p>Good job, there aren't any leaf nodes in the top level directory!</p>
-         </div>
-        }
-      </div>
-    )
+      </Advice>
+    );
   }
 }

@@ -75,8 +75,7 @@ function getFilesJSON(lsPath, basePath, items) {
         }
         let foundMatchingExtension = false;
         for (let extension of FILE_EXTENSIONS) {
-          const endsWith = '.' + extension;
-          if (filename.slice(filename.length - endsWith.length) === endsWith) {
+          if (filename.endsWith('.' + extension)) {
             foundMatchingExtension = true;
             break;
           }
