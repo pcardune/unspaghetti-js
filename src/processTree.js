@@ -1,6 +1,9 @@
-import vis from 'vis';
 import randomColor from 'randomcolor';
 import {getModuleDirpath} from './util';
+
+Array.prototype.includes = function(a) {
+  return this.indexOf(a) >= 0;
+}
 
 export default function processTree(tree, config) {
   config = Object.assign(
@@ -14,7 +17,7 @@ export default function processTree(tree, config) {
   const allModules = Object.keys(tree);
   const moduleToMaxDepth = {};
   const cycles = [];
-  const packageCycles = {};
+  let packageCycles = {};
   const isInCycle = m => cycles.some(cycle => cycle.includes(m));
   const isEdgeInCycle = (from, to) => cycles.some(cycle => cycle.includes(from) && cycle.includes(to))
   const isOuterModule = module => module.indexOf('..') === 0;
@@ -38,10 +41,7 @@ export default function processTree(tree, config) {
     if (cycleStartIndex >= 0) {
       // cycle detected....
       const cycle = visitedModules.slice(cycleStartIndex);
-      cycles.push(cycle);
-      console.log(
-        `Found a cycle: `,
-        cycle.concat(root).join(' -> '));
+      cycles.push(cycle.concat(root));
       return;
     }
     const packageCycleStartIndex = visitedPackages.findIndex(d => d.package === rootPackage);
@@ -52,7 +52,6 @@ export default function processTree(tree, config) {
         cyclePackages.push(rootPackage);
       }
       const key = cyclePackages.join(',');
-      console.log("found cycle", key);
       if (!packageCycles[key]) {
         packageCycles[key] = {
           packageCycle: cyclePackages,
@@ -184,11 +183,6 @@ export default function processTree(tree, config) {
     }
     maxDirectoriesInLevel = Math.max(directoriesInLevel.length, maxDirectoriesInLevel);
   });
-  for (let level = 0; level < maxLevel; level++) {
-    if (directoriesByLevel[level]) {
-      console.log('directoriesByLevel', level, directoriesByLevel[level]);
-    }
-  }
 
   var edges = [].concat(
     ...modulesToRender.map(
@@ -206,8 +200,8 @@ export default function processTree(tree, config) {
   );
 
   var data = {
-    nodes: new vis.DataSet(nodes.slice(0)),
-    edges: new vis.DataSet(edges.slice(0)),
+    nodes: nodes.slice(0),
+    edges: edges.slice(0),
   };
 
   var options = {
@@ -237,12 +231,38 @@ export default function processTree(tree, config) {
     groups: groupsConfig,
   };
 
+  packageCycles = Object.values(packageCycles);
+
+  const advice = [];
+  advice.push({
+    title: `${cycles.length} Circular Module Dependencies`,
+    explanation: 'Get rid of circular dependencies in the module dependency graph.',
+    failure: cycles.length > 0,
+    failureMessage: cycles.map(
+      (cycle, index)  => `${index+1}) ` + cycle.join(' → ')).join('\n'),
+  });
+  advice.push({
+    title: `${packageCycles.length} Circular "Package" Dependencies`,
+    explanation: 'Get rid of circular dependencies across directories.',
+    failure: packageCycles.length > 0,
+    failureMessage: packageCycles.map(
+      (cycle, index) => (
+        `${index+1}) cycle from ` + cycle.packageCycle.join(' → ') +
+        ` found in ${Object.values(cycle.visitedModules).length} different paths:\n` +
+        Object.values(cycle.visitedModules).map(
+          visitedModules => '    ' + visitedModules.join(' → \n    ')
+        ).join('\n\n')
+      )
+    ).join('\n\n')
+  });
+
   return {
+    advice,
     data,
     options,
     directories,
     cycles,
-    packageCycles: Object.values(packageCycles),
+    packageCycles,
     clusterDirpath(dirpath, network) {
       const clusterConfig = {
         group: dirpath,
@@ -263,14 +283,6 @@ export default function processTree(tree, config) {
         });
         const maxWidth = maxDirectoriesInLevel * 25 * 2 * 4;
         const spacing = maxWidth / directoriesByLevel[clusterConfig.level].length;
-        console.log(
-          'x',
-          'maxWidth', maxWidth,
-          'spacing', spacing,
-          'on level', clusterConfig.level,
-          'cluster', clusterConfig.group,
-          'is at index',
-          directoriesByLevel[clusterConfig.level].indexOf(dirpath));
         Object.assign(clusterConfig, {
           x: directoriesByLevel[clusterConfig.level].indexOf(dirpath) * spacing + spacing / 2,
           y: clusterConfig.level * 25 * 2 * 3,
