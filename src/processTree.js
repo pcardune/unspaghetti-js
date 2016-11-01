@@ -14,7 +14,7 @@ export default function processTree(tree, config) {
   const allModules = Object.keys(tree);
   const moduleToMaxDepth = {};
   const cycles = [];
-  const dirpathCycles = {};
+  const packageCycles = {};
   const isInCycle = m => cycles.some(cycle => cycle.includes(m));
   const isEdgeInCycle = (from, to) => cycles.some(cycle => cycle.includes(from) && cycle.includes(to))
   const isOuterModule = module => module.indexOf('..') === 0;
@@ -25,14 +25,15 @@ export default function processTree(tree, config) {
   const isImportedByInnerModule = module => allModules.some(
     m => isInnerModule(m) && tree[m].includes(module)
   );
+  const getModulePackage = module => getModuleDirpath(module).split('/')[0];
   const moduleSortString = {};
   let maxDepth = 0;
-  function traverse(root, depth=0, visitedModules=[], visitedDirpaths=[]) {
+  function traverse(root, depth=0, visitedModules=[], visitedPackages=[]) {
     if (!isInnerModule(root) && !isImportedByInnerModule(root)) {
       // we are not interested in these...
       return;
     }
-    const rootDirpath = getModuleDirpath(root);
+    const rootPackage = getModulePackage(root);
     const cycleStartIndex = visitedModules.indexOf(root);
     if (cycleStartIndex >= 0) {
       // cycle detected....
@@ -43,25 +44,25 @@ export default function processTree(tree, config) {
         cycle.concat(root).join(' -> '));
       return;
     }
-    const dirpathCycleStartIndex = visitedDirpaths.findIndex(d => d.dirpath === rootDirpath);
-    if (dirpathCycleStartIndex >= 0 && dirpathCycleStartIndex < visitedDirpaths.length - 1) {
-      const cycle = visitedDirpaths.slice(dirpathCycleStartIndex);
-      const cycleDirs = cycle.map(c => c.dirpath);
-      if (cycleDirs[cycleDirs.length - 1] !== rootDirpath) {
-        cycleDirs.push(rootDirpath);
+    const packageCycleStartIndex = visitedPackages.findIndex(d => d.package === rootPackage);
+    if (packageCycleStartIndex >= 0 && packageCycleStartIndex < visitedPackages.length - 1) {
+      const cycle = visitedPackages.slice(packageCycleStartIndex);
+      const cyclePackages = cycle.map(c => c.package);
+      if (cyclePackages[cyclePackages.length - 1] !== rootPackage) {
+        cyclePackages.push(rootPackage);
       }
-      const key = cycleDirs.join(',');
+      const key = cyclePackages.join(',');
       console.log("found cycle", key);
-      if (!dirpathCycles[key]) {
-        dirpathCycles[key] = {
-          dirpathCycle: cycleDirs,
+      if (!packageCycles[key]) {
+        packageCycles[key] = {
+          packageCycle: cyclePackages,
           visitedModules: {},
         };
       }
       const modulePath = visitedModules.slice(cycle[0].startIndex).concat(
         root
       );
-      dirpathCycles[key].visitedModules[modulePath.join(',')] = modulePath;
+      packageCycles[key].visitedModules[modulePath.join(',')] = modulePath;
     }
     visitedModules[root] = true;
     maxDepth = Math.max(depth, maxDepth);
@@ -70,24 +71,24 @@ export default function processTree(tree, config) {
       return;
     }
     moduleToMaxDepth[root] = depth;
-    moduleSortString[root] = rootDirpath.toLowerCase(); //(visitedModules.join('|') + '|' + root).toLowerCase();
+    moduleSortString[root] = getModuleDirpath(root).toLowerCase(); //(visitedModules.join('|') + '|' + root).toLowerCase();
     if (depth >= 20) {
       console.warn("Maximum depth of 20 exceeded!", visitedModules.join(' -> '))
       return;
     }
-    let nextVisitedDirpaths = visitedDirpaths;
-    if (visitedDirpaths.length === 0 ||
-        visitedDirpaths[visitedDirpaths.length - 1].dirpath !== rootDirpath
+    let nextVisitedPackages = visitedPackages;
+    if (visitedPackages.length === 0 ||
+        visitedPackages[visitedPackages.length - 1].package !== rootPackage
     ) {
-      nextVisitedDirpaths = nextVisitedDirpaths.concat({
-        dirpath: rootDirpath,
+      nextVisitedPackages = nextVisitedPackages.concat({
+        package: rootPackage,
         startIndex: visitedModules.length,
         endIndex: visitedModules.length,
       });
     } else {
-      nextVisitedDirpaths[nextVisitedDirpaths.length - 1] = {
-        ...visitedDirpaths[visitedDirpaths.length - 1],
-        endIndex: visitedDirpaths[visitedDirpaths.length - 1].endIndex + 1
+      nextVisitedPackages[nextVisitedPackages.length - 1] = {
+        ...visitedPackages[visitedPackages.length - 1],
+        endIndex: visitedPackages[visitedPackages.length - 1].endIndex + 1
       };
     }
     tree[root].forEach(
@@ -95,7 +96,7 @@ export default function processTree(tree, config) {
         child,
         depth + 1,
         visitedModules.concat(root),
-        nextVisitedDirpaths
+        nextVisitedPackages
       )
     );
   }
@@ -241,7 +242,7 @@ export default function processTree(tree, config) {
     options,
     directories,
     cycles,
-    dirpathCycles: Object.values(dirpathCycles),
+    packageCycles: Object.values(packageCycles),
     clusterDirpath(dirpath, network) {
       const clusterConfig = {
         group: dirpath,

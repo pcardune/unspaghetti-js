@@ -40,7 +40,7 @@ export default class DirectoryCycles extends Component {
   };
 
   render() {
-    const {dirpathCycles: cycles} = this.props.processedTree;
+    const {packageCycles: cycles} = this.props.processedTree;
     let explanation = "Good job, there aren't any circular dependencies between directories!"
     if (cycles.length > 0) {
       explanation = `
@@ -52,13 +52,13 @@ export default class DirectoryCycles extends Component {
     }
     return (
       <Advice
-        title={`${cycles.length} Circular Directory Dependencies`}
+        title={`${cycles.length} Circular "Package" Dependencies`}
         explanation={explanation}
         failure={cycles.length > 0}>
         <div className="list-group">
           {cycles.map(cycle => (
-             <div key={cycle.dirpathCycle.join(',')} className="list-group-item">
-               {cycle.dirpathCycle.join(' → ')}
+             <div key={cycle.packageCycle.join(',')} className="list-group-item">
+               {cycle.packageCycle.join(' → ')}
                <ExpandableList
                  items={Object.values(cycle.visitedModules)}
                  renderItem={(visitedModules) => (

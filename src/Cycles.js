@@ -20,7 +20,7 @@ export default class Cycles extends Component {
         failure={cycles.length > 0}>
         <div className="list-group">
           {cycles.map(cycle => (
-             <div className="list-group-item">
+             <div key={cycle.join(',')} className="list-group-item">
                {cycle.join(' → ')}
              </div>
            ))}
